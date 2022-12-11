@@ -2,6 +2,8 @@ import ast
 import pandas as pd
 import random
 import matplotlib.pyplot as plt
+from sklearn.decomposition import PCA
+import numpy as np
 
 import config as cfg
 
@@ -128,3 +130,33 @@ def arrange_data_per_frame(data, window_size, feature_set=cfg.FEATURE_SET_FULL, 
                 # populate the output list for with data of each frame
                 data_per_frame.append(data_pt)
     return data_per_frame
+
+def apply_pca(n_components, X_train, X_val, X_test):
+    """
+    Function to apply PCA on the features data with n_components
+    """
+    pca = PCA(n_components=n_components)
+    X_train_reduced = pca.fit_transform(X_train)
+    X_val_reduced = pca.transform(X_val) 
+    X_test_reduced = pca.transform(X_test) 
+
+    return X_train_reduced, X_val_reduced, X_test_reduced
+
+def evaluate_principal_components(X_features):
+    """
+    Function to evaluate the principal components of the features data with a number of components, 
+    calculate the information loss, and plot the feature correlation with the principal components.
+    """
+    n_components = [5, 6, 7]
+    for n in n_components:
+        pca = PCA(n_components=n)
+        X_features_reduced = pca.fit_transform(X_features)
+        explained_variance = pca.explained_variance_ratio_
+        print("explained variance with {} components: ".format(n_components), sum(explained_variance))
+        info_loss = 1 - sum(explained_variance)
+        print("information loss with {} components: ".format(n_components), info_loss)
+        component_importance = np.array(pca.components_)
+        plt.imshow(np.abs(component_importance), cmap='hot', interpolation='nearest')
+        plt.xlabel(cfg.FEATURE_SET_FULL)
+        plt.colorbar()
+        plt.show()
