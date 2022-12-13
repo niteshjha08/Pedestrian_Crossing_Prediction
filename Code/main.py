@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import random
 import numpy as np
 import matplotlib.pyplot as plt
@@ -60,6 +61,13 @@ def start_pipeline():
 
     print("size train: ", len(X_train))
     print("size test: ", len(X_test))
+
+    # Plot principal component of the feature set
+    # du.evaluate_principal_components(X_train)
+    
+    # apply pca
+    # X_train, X_val, X_test = du.apply_pca(5, X_train, X_val, X_test)
+
     dataset = {'train_x': X_train, 'train_y': Y_train, 'val_x': X_val, 'val_y': Y_val}
 
     # train logistic regression model

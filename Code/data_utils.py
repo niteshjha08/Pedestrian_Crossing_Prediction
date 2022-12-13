@@ -131,32 +131,75 @@ def arrange_data_per_frame(data, window_size, feature_set=cfg.FEATURE_SET_FULL, 
                 data_per_frame.append(data_pt)
     return data_per_frame
 
-def apply_pca(n_components, X_train, X_val, X_test):
+
+def get_pca(n_components):
+    """
+    Function to get PCA with n_components
+    """
+    pca = PCA(n_components=n_components)
+    return pca 
+
+
+def apply_pca(pca, X):
     """
     Function to apply PCA on the features data with n_components
     """
-    pca = PCA(n_components=n_components)
-    X_train_reduced = pca.fit_transform(X_train)
-    X_val_reduced = pca.transform(X_val) 
-    X_test_reduced = pca.transform(X_test) 
+    X_reduced = pca.fit_transform(X)
 
-    return X_train_reduced, X_val_reduced, X_test_reduced
+    return X_reduced
 
 def evaluate_principal_components(X_features):
     """
     Function to evaluate the principal components of the features data with a number of components, 
     calculate the information loss, and plot the feature correlation with the principal components.
     """
-    n_components = [5, 6, 7]
+    # n_components = [1,2,3,4,5, 6, 7,8,9,10,11,12]
+    n_components = [1, 4, 8, 12]
+
+    explained_variances = []
     for n in n_components:
         pca = PCA(n_components=n)
         X_features_reduced = pca.fit_transform(X_features)
         explained_variance = pca.explained_variance_ratio_
-        print("explained variance with {} components: ".format(n_components), sum(explained_variance))
+        print("explained variance with {} components: ".format(n), sum(explained_variance))
         info_loss = 1 - sum(explained_variance)
+        explained_variances.append(sum(explained_variance))
         print("information loss with {} components: ".format(n_components), info_loss)
         component_importance = np.array(pca.components_)
         plt.imshow(np.abs(component_importance), cmap='hot', interpolation='nearest')
         plt.xlabel(cfg.FEATURE_SET_FULL)
+        plt.ylabel("Principal components")
         plt.colorbar()
         plt.show()
+    # plt.bar(n_components, explained_variances)
+    # plt.xlabel("Number of components")
+    # plt.ylabel("Explained variance")
+    # plt.show()
+
+def find_number_of_components(X_features, variance_threshold=0.95):
+    pca = PCA(n_components=variance_threshold)
+    X_features_reduced = pca.fit_transform(X_features)
+    print("number of features:",X_features_reduced.shape[1])
+
+
+
+if __name__=="__main__":
+
+    train_data_file_path = "../Data/crossing_dataset_train.csv"
+    training_data = load_data(train_data_file_path)
+
+    test_data_file_path = "../Data/crossing_dataset_test.csv"
+    testing_data = load_data(test_data_file_path)
+
+    feature_set = cfg.FEATURE_SET_FULL
+
+    data_per_frame = arrange_data_per_frame(training_data, cfg.WINDOW_SIZE, feature_set=feature_set)
+    random.shuffle(data_per_frame)
+
+    from sklearn.model_selection import train_test_split
+
+    train_data, val_data = train_test_split(data_per_frame, train_size=cfg.TRAIN_SPLIT)
+
+    X_train = []
+    Y_train = []
+    print(train_data[0])

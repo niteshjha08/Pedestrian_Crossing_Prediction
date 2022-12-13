@@ -32,7 +32,7 @@ def model_arch1(parameters):
         model.add(layers.Dense(32, kernel_regularizer=keras.regularizers.l1(l1), activation='relu'))
     elif l2 != 0:
         model.add(layers.Dense(32, kernel_regularizer=keras.regularizers.l2(l2), activation='relu'))
-    model.add(layers.Dense(1, activation='linear'))
+    model.add(layers.Dense(1, activation='sigmoid'))
     model.compile(optimizer=keras.optimizers.Adam(learning_rate=lr), loss='binary_crossentropy')
     
     return model
@@ -59,7 +59,7 @@ def model_arch2(parameters):
         model.add(layers.Dropout(do))
         
         model.add(layers.Dense(16, kernel_regularizer=keras.regularizers.l2(l2), activation='relu'))
-    model.add(layers.Dense(1, activation='linear'))
+    model.add(layers.Dense(1, activation='sigmoid'))
     model.compile(optimizer=keras.optimizers.Adam(learning_rate=lr), loss='binary_crossentropy')
     
     return model
@@ -71,8 +71,6 @@ def model_arch3(parameters):
     l2 = parameters.get('l2', 0)
     do = parameters.get('do', 0)
     in_dim = parameters.get('in', 12)
-    print("=====================================")  
-    print(in_dim)
 
     model = keras.Sequential()
     model.add(layers.Dense(12, input_dim=in_dim, activation='relu'))
@@ -91,7 +89,7 @@ def model_arch3(parameters):
         model.add(layers.Dropout(do))
         model.add(layers.Dense(32, kernel_regularizer=keras.regularizers.l1(l1), activation='relu'))
         model.add(layers.Dropout(do))
-        # model.add(layers.Dense(16, kernel_regularizer=keras.regularizers.l1(l1), activation='relu'))
+
     elif l2 != 0:
         model.add(layers.Dense(16, kernel_regularizer=keras.regularizers.l2(l2), activation='relu'))
         model.add(layers.Dropout(do))
@@ -111,7 +109,7 @@ def model_arch3(parameters):
     return model
 
 
-def train_model(parameters, epochs = 50):
+def train_model(X_train, Y_train, X_val, Y_val, parameters, epochs = 50):
     output_path = parameters['o']
     if not os.path.exists(output_path):
         os.makedirs(output_path)
@@ -119,6 +117,9 @@ def train_model(parameters, epochs = 50):
                                                mode='min')
     early_stopping = EarlyStopping(monitor='loss', patience=5)
     model_layer = parameters['ml']
+
+    parameters['in'] = np.array(X_train).shape[1]
+
     if model_layer == 2:
         model = model_arch1(parameters)
     elif model_layer == 4:
@@ -126,8 +127,8 @@ def train_model(parameters, epochs = 50):
     else:
         model = model_arch3(parameters)
 
-    history = model.fit(X_train, Y_train, epochs=epochs, batch_size=100000,
-                        validation_data=(X_val, Y_val), workers=4, callbacks=[best_val_loss_checkpoint, early_stopping])
+    history = model.fit(X_train, Y_train, epochs=epochs, batch_size=60000,
+                        validation_data=(X_val, Y_val), workers=4, callbacks=[best_val_loss_checkpoint])
 
     plt.plot(history.history['loss'], 'b', label='train_loss')
     plt.plot(history.history['val_loss'], 'orange', label='val_loss')
@@ -207,13 +208,14 @@ if __name__ == "__main__":
         X_test.append(data_pt[4:])
         Y_test.append(data_pt[3])
 
-    # numpy_x = os.path.join('train_data', 'train_x.npy')
-    # train_x = np.load(numpy_x)
-
-    # numpy_y = os.path.join('train_data', 'train_y.npy')
-    # train_y = np.load(numpy_y)
-
-    # x_train, x_val, y_train, y_val = train_test_split(train_x, train_y, test_size=0.3, random_state=42)
+    pca_trans = du.get_pca(n_components=8)
+    X_train = du.apply_pca(pca_trans, X_train)
+    X_val = du.apply_pca(pca_trans, X_val)
+    X_test = du.apply_pca(pca_trans, X_test)
+    Y_train, Y_val, Y_test = np.array(Y_train), np.array(Y_val), np.array(Y_test)
+    print("Training set length: ", len(X_train))
+    print("Validation set length: ", len(X_val))
+    print("Testing set length: ", len(X_test))
 
     print('[INFO]: STARTED Hyperparameter tuning')
     learning_rates = [0.01, 0.001, 0.0001]
@@ -245,16 +247,15 @@ if __name__ == "__main__":
                         print("output_path: ", output_path)
                         print('[INFO]: Started model training for parameters: \n', parameters)
                         
-                        # min_val_loss = train_model(parameters)
-
-                        # if best_model_val_loss is None:
-                        #     best_model_val_loss = min_val_loss
-                        #     best_model_count = model_count
-                        #     best_parameters = parameters
-                        # elif best_model_val_loss > min_val_loss:
-                        #     best_model_val_loss = min_val_loss
-                        #     best_model_count = model_count
-                        #     best_parameters = parameters
+                        min_val_loss = train_model(X_train, Y_train, X_val, Y_val, parameters, epochs = 50)
+                        if best_model_val_loss is None:
+                            best_model_val_loss = min_val_loss
+                            best_model_count = model_count
+                            best_parameters = parameters
+                        elif best_model_val_loss > min_val_loss:
+                            best_model_val_loss = min_val_loss
+                            best_model_count = model_count
+                            best_parameters = parameters
 
                         model_count += 1
 
