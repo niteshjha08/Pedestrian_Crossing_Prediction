@@ -10,12 +10,15 @@ from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
 import random
 
 def generate_learning_curve(data_per_frame, parameters, epochs = 50):
-    train_losses=  []
+    """
+    Generates a learning curve of the training and validation losses vs. training sample size
+    """
     val_losses=  []
-
+    # Take section of data to generate learning curve
     for i in np.arange(0.02, 0.03, 0.001):
-
+        # Take a subset of the data
         partial_data = data_per_frame[:int(len(data_per_frame)*i)]
+        # Split the data into training and validation sets
         train_data, val_data = train_test_split(partial_data, train_size=cfg.TRAIN_SPLIT)
 
         X_train = []
@@ -29,9 +32,7 @@ def generate_learning_curve(data_per_frame, parameters, epochs = 50):
         for data_pt in val_data:
             X_val.append(data_pt[4:])
             Y_val.append(data_pt[3])
-
-        print(X_train[0])
-
+        # Apply PCA
         pca_trans = du.get_pca(n_components=8)
         X_train = du.apply_pca(pca_trans, X_train)
         X_val = du.apply_pca(pca_trans, X_val)
@@ -40,12 +41,11 @@ def generate_learning_curve(data_per_frame, parameters, epochs = 50):
         Y_val = np.array(Y_val)
 
         print('[INFO]: Started model training for parameters: \n', parameters)
-        
-        min_training_loss, min_val_loss = nn.train_model(X_train, Y_train, X_val, Y_val, parameters, epochs)
-        train_losses.append(min_training_loss)
+        # Train the model
+        min_val_loss = nn.train_model(X_train, Y_train, X_val, Y_val, parameters, epochs)
+        # Append the validation loss to the list
         val_losses.append(min_val_loss)
-
-    plt.plot(train_losses, label='Training loss')
+    # Plot the learning curve
     plt.plot(val_losses, label='Validation loss')
     plt.xlabel("Training data percentage")
     plt.ylabel("Loss")
