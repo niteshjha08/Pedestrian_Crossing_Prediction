@@ -130,6 +130,8 @@ def train_model(X_train, Y_train, X_val, Y_val, parameters, epochs = 50):
     lr = parameters['lr']
     l1 = parameters['l1']
     l2 = parameters['l2']
+    es = parameters.get('es', False)
+    
     layer_count = parameters['ml']
     dropout = parameters['do']
     # Create the output directory if it does not exist
@@ -146,9 +148,16 @@ def train_model(X_train, Y_train, X_val, Y_val, parameters, epochs = 50):
         model = four_hlayer_network(parameters)
     else:
         model = eight_hlayer_network(parameters)
+    
+    early_stopping = EarlyStopping(monitor='loss', patience=10)
     # Train the model
+    if es:
+        cb = [best_val_loss_checkpoint, early_stopping]
+
+    else:
+        cb = [best_val_loss_checkpoint]
     history = model.fit(X_train, Y_train, epochs=epochs, batch_size=512,
-                        validation_data=(X_val, Y_val), workers=4, callbacks=[best_val_loss_checkpoint])
+                        validation_data=(X_val, Y_val), workers=4, callbacks=cb)
     # Plot training & validation loss values
     plt.plot(history.history['loss'], 'b', label='train_loss')
     plt.plot(history.history['val_loss'], 'orange', label='val_loss')
@@ -195,55 +204,9 @@ def get_viz():
     model = eight_hlayer_network(parameters)
     ann_viz(model, view = True, filename="arch3", title="DNN with 8 hidden layers")
 
-if __name__ == "__main__":
-    # Load the data
-    train_data_file_path = "../Data/crossing_dataset_train.csv"
-    training_data = du.load_data(train_data_file_path)
 
-    test_data_file_path = "../Data/crossing_dataset_test.csv"
-    testing_data = du.load_data(test_data_file_path)
-
-    feature_set = cfg.FEATURE_SET_FULL
-
-    # Unravel the data into frames
-    data_per_frame = du.arrange_data_per_frame(training_data, cfg.WINDOW_SIZE, feature_set=feature_set)
-    random.shuffle(data_per_frame)
-    test_data = du.arrange_data_per_frame(testing_data, cfg.WINDOW_SIZE, feature_set=feature_set)
-
-    # split the dataset into training-test and input-output
-    train_data, val_data = train_test_split(data_per_frame, train_size=cfg.TRAIN_SPLIT, random_state=10)
-
-    # Split the data into features and labels
-    X_train = []
-    Y_train = []
-    for data_pt in train_data:
-        X_train.append(data_pt[4:])
-        Y_train.append(data_pt[3])
-
-    X_val = []
-    Y_val = []
-    for data_pt in val_data:
-        X_val.append(data_pt[4:])
-        Y_val.append(data_pt[3])
-
-    X_test = []
-    Y_test = []
-    for data_pt in test_data:
-        X_test.append(data_pt[4:])
-        Y_test.append(data_pt[3])
-
-    # Apply PCA for 8 components , i.e. ~ 95% variance
-    pca_trans = du.get_pca(n_components=8)
-    X_train = du.apply_pca(pca_trans, X_train)
-    X_val = du.apply_pca(pca_trans, X_val)
-    X_test = du.apply_pca(pca_trans, X_test)
-
-    Y_train, Y_val, Y_test = np.array(Y_train), np.array(Y_val), np.array(Y_test)
-
-    print("Training set length: ", len(X_train))
-    print("Validation set length: ", len(X_val))
-    print("Testing set length: ", len(X_test))
-
+def tune_hyperparameters(X_train, Y_train, X_val, Y_val):
+    
     print('[INFO]: STARTED Hyperparameter tuning')
     # Hyperparameter tuning values
     learning_rates = [0.01, 0.001, 0.0001]
@@ -256,7 +219,7 @@ if __name__ == "__main__":
     best_model_val_loss = None
     best_parameters = None
 
-    model_path = "nn_models_both_plots"
+    model_path = "nn_models"
     model_count = 1
     # Tune the hyperparameters for all the combinations
     for lr in learning_rates:
@@ -290,5 +253,72 @@ if __name__ == "__main__":
     print('[INFO]: COMPLETED Hyperparameter tuning')
     print('[INFO]; best parameters; ', best_parameters)
     print('[INFO]: best val loss: ', best_model_val_loss)
-    print('[INFO]: best model count: ', best_model_count)
-    print('[INFO]: Train Model Count {0} on full data on parameters {1}'.format(best_model_count, best_parameters))
+    
+
+def find_best_model():
+    min_val_loss = 10000
+    best_model_count = -1
+    val_losses = []
+    model_count = 1
+    for i in range(108):
+        file_path = "nn_models/model_count_{0}/history.csv".format(str(model_count))
+        print(file_path)
+        f = open(file_path, "r")
+        lines = f.readlines()
+        val_loss = float(lines[-1].split(",")[1])
+        train_loss = float(lines[-1].split(",")[2])
+        diff = np.abs(train_loss - val_loss)
+
+        val_losses.append(diff)
+        if(val_loss < min_val_loss):
+
+            min_val_loss = val_loss
+            best_model_count = model_count
+        model_count+=1
+    print("minimum ind", np.argmin(val_losses))
+    print("Best model count: {}".format(best_model_count))
+    print("Min val loss: {}".format(min_val_loss))
+    plt.plot(val_losses)
+    plt.xlabel("Models")
+    plt.ylabel("abs(Training loss - Validation loss)")
+    plt.show() 
+
+
+
+if __name__ == "__main__":
+    # Load the data
+    train_data_file_path = "../Data/crossing_dataset_train.csv"
+    training_data = du.load_data(train_data_file_path)
+
+    test_data_file_path = "../Data/crossing_dataset_test.csv"
+    testing_data = du.load_data(test_data_file_path)
+
+    feature_set = cfg.FEATURE_SET_FULL
+
+    # Unravel the data into frames
+    per_frame_data = du.unravel_data(training_data, cfg.WINDOW_SIZE, feature_set=feature_set)
+    random.shuffle(per_frame_data)
+    test_data = du.unravel_data(testing_data, cfg.WINDOW_SIZE, feature_set=feature_set)
+
+    # Split the data into train and validation
+    train_data, val_data = train_test_split(per_frame_data, train_size=cfg.TRAIN_SPLIT, random_state=10)
+
+    # Split the train data into input and output
+    X_train, Y_train = du.split_input_and_output(train_data)
+    # Split the validation data into input and output
+    X_val, Y_val = du.split_input_and_output(val_data)
+    # Split the test data into input and output
+    X_test, Y_test = du.split_input_and_output(test_data)
+    
+    # Apply PCA for 8 components , i.e. ~ 95% variance
+    pca_trans = du.get_pca(n_components=8)
+    X_train = du.apply_pca(pca_trans, X_train)
+    X_val = du.apply_pca(pca_trans, X_val)
+    X_test = du.apply_pca(pca_trans, X_test)
+
+    Y_train, Y_val, Y_test = np.array(Y_train), np.array(Y_val), np.array(Y_test)
+
+    print("Training set length: ", len(X_train))
+    print("Validation set length: ", len(X_val))
+    print("Testing set length: ", len(X_test))
+    tune_hyperparameters(X_train, Y_train, X_val, Y_val)

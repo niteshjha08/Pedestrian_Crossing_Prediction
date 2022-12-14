@@ -10,3 +10,4 @@ TRAIN_SPLIT = 0.7
 FEATURE_SET_FULL = ['moving slow', 'stopped', 'handwave', 'look', 'clear path',
                     'moving fast', 'looking', 'standing', 'slow down', 'nod', 'speed up', 'bounding_boxes']
 OUTPUT = "../Data/output"
+THRESHOLD = 0.5

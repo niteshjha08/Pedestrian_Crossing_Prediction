@@ -60,7 +60,7 @@ if __name__ == '__main__':
 
     feature_set = cfg.FEATURE_SET_FULL
 
-    data_per_frame = du.arrange_data_per_frame(training_data, cfg.WINDOW_SIZE, feature_set=feature_set)
+    data_per_frame = du.unravel_data(training_data, cfg.WINDOW_SIZE, feature_set=feature_set)
     random.shuffle(data_per_frame)
 
     parameters = {'lr': 0.01, 'l1': 0, 'l2': 0.01, 'do': 0, 'ml': 8, 'o': 'check_learning_curve'}

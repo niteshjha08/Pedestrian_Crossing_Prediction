@@ -19,15 +19,11 @@ def load_data(file_path):
 
 def explore_data(data_frame):
     count = 0
-    for i, row in data_frame.iterrows():
+    for _, row in data_frame.iterrows():
         count += len(row['frame_numbers'])
     print("Number of Pedestrian-Frames: %d" % count)
 
-    # Let's take a more in-depth look at that first row:
-    print(data_frame.iloc[0])
-    print(data_frame.iloc[0]['frame_numbers'])
-
-    # calculate the number of features
+    # plot the distribution of crossing
     columns = []
     for col in data_frame.columns:
         if col != 'video_id' and col != 'ped_ind' and col != 'frame_numbers' and col != 'cross_overall' and col != 'crossing':
@@ -35,23 +31,23 @@ def explore_data(data_frame):
     print("[INFO] Features : ", columns)
     print("[INFO] Number of features : ", len(columns))
 
-    # generate a random data id to plot
+    # select a random row from the data frame
     idx = random.randint(0, len(data_frame))
+
     print("[INFO] For Video : {} ; Pedestrian {}".format(data_frame.iloc[idx]['video_id'],
                                                          data_frame.iloc[idx]['ped_ind']))
 
-    # plot the data for all frames for each feature and
-    # compare it to the crossing trend
+    # plot the features vs crossing across all frames
     fig, axs = plt.subplots(4, 3, figsize=(20, 20))
-    img_w, img_h = cfg.IMG_W, cfg.IMG_H
+    img_w = cfg.IMG_W
     for col, ax in zip(columns, axs.ravel()):
         # handle bounding boxes data separately
         if col == 'bounding_boxes':
-            bboxes_xcoords = []
+            xcoords = []
             for bbox in data_frame.iloc[idx][col]:
-                # normalize the bounding box x-coordinate for each frame
-                bboxes_xcoords.append(bbox[0] / img_w)
-            ax.plot(data_frame.iloc[idx]['frame_numbers'], bboxes_xcoords)
+                # normalize the x-coordinate
+                xcoords.append(bbox[0] / img_w)
+            ax.plot(data_frame.iloc[idx]['frame_numbers'], xcoords)
         else:
             ax.plot(data_frame.iloc[idx]['frame_numbers'], data_frame.iloc[idx][col])
         ax.plot(data_frame.iloc[idx]['frame_numbers'], data_frame.iloc[idx]['crossing'], linestyle='dashed')
@@ -59,77 +55,54 @@ def explore_data(data_frame):
         ax.set_xlabel("Frames ==>")
         ax.legend([col, 'crossing'])
     fig.show()
+    plt.show()
 
 
-def parse_bbox_x(elements, img_w):
-    '''
-    Function to parse and normalize the bounding box
-    x-coordinate value for each pedestrian data point
-    Input: Pedestrian bounding box data for all frames in the video
-    Ouput: Normalized bounding box x-coordinate data
-    '''
-    output = []
-    for i in range(len(elements)):
-        output.append(
-            round(int(float(elements[i][0]) + float(elements[i][2]) * 0.5) / img_w, 5))
-    return output
+def normalize_bbox_x(bboxes, img_w):
+    """
+    Function to normalize the bounding box x-coordinate
+    """
+    normalized_values = []
+    for i in range(len(bboxes)):
+        normalized_values.append(
+            round(int(float(bboxes[i][0]) + float(bboxes[i][2]) * 0.5) / img_w, 3))
+    return normalized_values
 
 
-def parse_bbox_y(elements, img_h):
-    '''
-    Function to parse and normalize the bounding box
-    y-coordinate value for each pedestrian data point
-    Input: Pedestrian bounding box data for all frames in the video
-    Ouput: Normalized bounding box y-coordinate data
-    '''
-    output = []
-    for i in range(len(elements)):
-        output.append(
-            round(int(float(elements[i][1])) / img_h, 5))
-    return output
+def unravel_data(data, window_size, feature_set=cfg.FEATURE_SET_FULL, img_w=cfg.IMG_W):
+    per_frame_data = []
+    # loop through every pedestrian and unravel to frame-wise data
+    for _, row in data.iterrows():
+       # get the features to be used for the model
+        feature_list = feature_set
 
-
-def arrange_data_per_frame(data, window_size, feature_set=cfg.FEATURE_SET_FULL, img_w=cfg.IMG_W, img_h=cfg.IMG_H):
-    data_per_frame = []
-    # loop through each data row, every row contains
-    # frame-by-frame data of a pedestrian which is to be unraveled
-    for i, row in data.iterrows():
-        # segregate features of the dataset that model needs to be trained on
-        attr_list = feature_set
-
-        # get the frames and outputs of crossing for all the frames
+        # get the frame values and output for each video and each pedestrian
         frames = row['frame_numbers']
         outputs = row['crossing']
 
-        # empty container to hold data for each feature and populate it with data feature-wise
-        # data for bounding box feature should be handled separately
-        attributes = {}
-        for attr in attr_list[:-1]:
-            attributes[attr] = row[attr]
-        attributes['bounding_boxes'] = parse_bbox_x(row['bounding_boxes'], img_w)
+        # get the feature for each pedestrian and normalize the bounding box x-coordinate
+        features = {}
+        for feat in feature_list[:-1]:
+            features[feat] = row[feat]
+        features['bounding_boxes'] = normalize_bbox_x(row['bounding_boxes'], img_w)
 
         # loop through every frame
         for j in range(len(frames)):
             if j >= window_size:
-                # if sufficient frames have been initialized, curate data of previous frames
-                # data for each frame is arranged above explained format
-                data_pt = []
-                data_pt.append(row['video_id'])
-                data_pt.append(row['ped_ind'])
-                data_pt.append(frames[j])
-                data_pt.append(outputs[j])
+                # initialize the data row with the video id, pedestrian id and frame number
+                data_row = [row['video_id'], row['ped_ind'], frames[j], outputs[j]]
 
-                # gather data for previous frame for each feature, bounding boxes to be handled separately
+                # populate the data row with the features of the current frame
                 for k in range(window_size, 0, -1):
-                    for attr in attr_list:
-                        if attr == 'bounding_boxes':
-                            data_pt.append(attributes[attr][j - k])
+                    for feat in feature_list:
+                        if feat == 'bounding_boxes':
+                            data_row.append(features[feat][j - k])
                         else:
-                            data_pt.append(int(attributes[attr][j - k]))
-                data_pt[3] = int(data_pt[3])
-                # populate the output list for with data of each frame
-                data_per_frame.append(data_pt)
-    return data_per_frame
+                            data_row.append(int(features[feat][j - k]))
+                data_row[3] = int(data_row[3])
+                # append the data row to the list
+                per_frame_data.append(data_row)
+    return per_frame_data
 
 
 def get_pca(n_components):
@@ -182,6 +155,16 @@ def find_number_of_components(X_features, variance_threshold=0.95):
     print("number of features:",X_features_reduced.shape[1])
 
 
+def split_input_and_output(per_frame_data):
+    """
+    Function to split the data into input and output
+    """
+    X = []
+    Y = []
+    for row in per_frame_data:
+        X.append(row[4:])
+        Y.append(row[3])
+    return X, Y
 
 if __name__=="__main__":
 
@@ -193,7 +176,7 @@ if __name__=="__main__":
 
     feature_set = cfg.FEATURE_SET_FULL
 
-    data_per_frame = arrange_data_per_frame(training_data, cfg.WINDOW_SIZE, feature_set=feature_set)
+    data_per_frame = unravel_data(training_data, cfg.WINDOW_SIZE, feature_set=feature_set)
     random.shuffle(data_per_frame)
 
     from sklearn.model_selection import train_test_split
