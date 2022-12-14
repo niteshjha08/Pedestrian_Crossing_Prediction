@@ -21,17 +21,11 @@ def generate_learning_curve(data_per_frame, parameters, epochs = 50):
         # Split the data into training and validation sets
         train_data, val_data = train_test_split(partial_data, train_size=cfg.TRAIN_SPLIT)
 
-        X_train = []
-        Y_train = []
-        for data_pt in train_data:
-            X_train.append(data_pt[4:])
-            Y_train.append(data_pt[3])
-
-        X_val = []
-        Y_val = []
-        for data_pt in val_data:
-            X_val.append(data_pt[4:])
-            Y_val.append(data_pt[3])
+        # Split the train data into input and output
+        X_train, Y_train = du.split_input_and_output(train_data)
+        # Split the validation data into input and output
+        X_val, Y_val = du.split_input_and_output(val_data)
+    
         # Apply PCA
         pca_trans = du.get_pca(n_components=8)
         X_train = du.apply_pca(pca_trans, X_train)
